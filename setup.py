@@ -9,7 +9,9 @@ setup(
             'snyk-code-debug = snyk_code_debug.snyk_code_debug:main_function'
         ]
     },
-        author='Sebastian Roth',
+    install_requires=[
+    ],
+    author='Sebastian Roth',
     author_email='sebastian.roth@snyk.io',
     description='Snyk Code debug script to determine files that failed analysis',
     url='http://github.com/sebsnyk/snyk-code-debug',
