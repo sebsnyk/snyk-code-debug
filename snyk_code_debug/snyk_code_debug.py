@@ -12,6 +12,7 @@ from .progress import update_progress_bar
 from .error_type import ErrorType
 from .checks.snyk_code_check import SnykCodeCheck
 from .checks.unicode_check import UnicodeCheck
+from .utils.ranged_type import ranged_type
 
 SUPPORTED_EXTENSIONS = ['apex','aspx','c','cc','cjs','cls','cpp','cs','ejs','erb','es','es6','go','h','haml','hpp','htm','html','hxx','java','js','jspx','jsx','jsp','kt','mjs','php','py','rb','rhtml','scala','slim','swift','ts','tsx','trigger','vb','vue','xml']
 
@@ -19,7 +20,8 @@ def main_function():
     parser = argparse.ArgumentParser(description='snyk-code-debug: Finds files that failed analysis')
 
     parser.add_argument('--extension', type=str, required=True, choices=SUPPORTED_EXTENSIONS, help='The file extension to search for')
-    parser.add_argument('--concurrency', type=int, default=10, choices=range(1, 20), help='Concurrency')
+    parser.add_argument('--concurrency', type=ranged_type(int, 1, 20), default=10, help='Concurrency')
+    parser.add_argument('--max-errors', type=ranged_type(int, 1, 100), default=None, help='Max errors')
 
     args = parser.parse_args()
 
@@ -36,18 +38,18 @@ def main_function():
 
     failed_files = {enum: [] for enum in ErrorType}
 
+    update_progress_bar(files_processed, total_files)
+
     def process_file(file):
         unicode_check = UnicodeCheck(file).check()
+        
         if unicode_check is not None:
             failed_files[unicode_check].append(file)
             return
         
         with tempfile.TemporaryDirectory() as tmpdirname:
-            
             basename = os.path.basename(file)
             shutil.copyfile(file, f'{tmpdirname}/{basename}')
-            
-            
             code_check = SnykCodeCheck(tmpdirname).check()
             if code_check is not None:
                 failed_files[code_check].append(file)
@@ -58,12 +60,16 @@ def main_function():
         for future in concurrent.futures.as_completed(futures):
             files_processed += 1
             update_progress_bar(files_processed, total_files)
-
+            
             exception = future.exception()
             if exception:
                 print("Exception occurred:")
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
 
+            total_failures = sum(len(files) for files in failed_files.values())
+            if args.max_errors is not None and total_failures >= args.max_errors:
+                executor.shutdown(wait=True)
+                break
 
         print()
 

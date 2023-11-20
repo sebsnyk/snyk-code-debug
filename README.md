@@ -36,3 +36,11 @@ Progress: [####################] 100% Completed
 Some files have failed analysis:
 invalid-file.cpp
 ```
+
+## Development
+
+Use PIPs built-in tooling to activate a locally linked binary for development.
+
+```
+pip install -e .
+```
