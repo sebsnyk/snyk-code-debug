@@ -154,6 +154,12 @@ def _report(args, failed_files):
         for file in errors:
             print(file)
 
+    errors = failed_files[ErrorType.LIKELY_MINIFIED]
+    if len(errors) > 0:
+        print('JavaScript files of 3 lines or fewer, excluded from analysis if minified:')
+        for file in errors:
+            print(file)
+
     errors = failed_files[ErrorType.ANALYSIS_ERROR]
     if len(errors) > 0:
         print('Analysis errors detected with the following files:')

@@ -10,7 +10,9 @@ Additionally, a small set of pre-flight checks is included and affected files ar
 - **Unicode check**, files not encoded in UTF-8 or compatible (e.g. CP1252) will be printed out separately.
 - **File size check**, files larger than 1MB. Snyk Code excludes these from analysis on the Web UI, the CLI and the IDE. 1MB is read as 1 MiB (1,048,576 bytes) and the limit is exclusive, so a file of exactly that size is still analysed.
 
-Two documented limits are deliberately not checked. Minified JS files of three lines or fewer are excluded by Snyk Code, but the documentation does not define minified, and guessing would mean reporting hand-written short files as skipped. The 255-character filename limit cannot be exceeded by a file sitting on a POSIX filesystem, where a single path component already caps at 255 bytes.
+- **Short JavaScript check**, JavaScript files of three lines or fewer. Snyk Code excludes minified JS at that length. Nothing in the documentation defines minified and every heuristic for it misclassifies something, so this reports on the line count alone and names it as such — the file is only excluded if it is in fact minified.
+
+The 255-character filename limit is not checked: a file on a POSIX filesystem cannot exceed it, because a single path component already caps at 255 bytes.
 
 For a whole set of restrictions around Snyk Code's supported files, please see the [technical specifications and guidance](https://docs.snyk.io/supported-languages/technical-specifications-and-guidance).
 
