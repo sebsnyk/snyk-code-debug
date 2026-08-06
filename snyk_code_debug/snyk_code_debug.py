@@ -7,7 +7,8 @@ import concurrent.futures
 import os.path
 import sys
 
-from .bisect import Bisector, ScanBudgetExceeded
+from .bisect import (
+    BISECT_MIN_FILES, Bisector, ScanBudgetExceeded, cost_estimate, default_max_depth)
 from .gitignore import glob_respecting_gitignore
 from .progress import update_progress_bar
 from .error_type import ErrorType
@@ -29,7 +30,7 @@ def main_function():
     parser.add_argument('--max-scans', type=int, default=None,
                         help='Abort bisect after this many scans and report what was found so far')
     parser.add_argument('--max-depth', type=int, default=None,
-                        help='After this many splits, scan the remaining subset file by file. Bounds the cost when failures are dense')
+                        help='After this many splits, scan the remaining subset file by file. Bounds the cost when failures are dense. Defaults to a value derived from the file count')
 
     args = parser.parse_args()
 
@@ -68,12 +69,24 @@ def main_function():
             failed_files[ErrorType.NON_UTF8_ENCODING].append(file)
             results.remove(file)
 
+    if args.strategy == 'bisect' and len(results) < BISECT_MIN_FILES:
+        print(f'Only {len(results)} file(s) — bisecting cannot beat scanning each one. Using linear.')
+        args.strategy = 'linear'
+
     if args.strategy == 'bisect':
         def report(scan_number, subset_size):
             print(f'\rScan {scan_number}: {subset_size} file(s)', end='')
 
+        depth = args.max_depth
+        if depth is None:
+            depth = default_max_depth(len(results))
+        best, worst = cost_estimate(len(results), depth)
+        print(f'Bisecting {len(results)} file(s), max depth {depth}. '
+              f'Expect ~{best} scans for a single failure, {worst} at worst; '
+              f'scanning every file would be {len(results)}.')
+
         bisector = Bisector(failed_parsing, max_scans=args.max_scans,
-                            max_depth=args.max_depth, on_scan=report)
+                            max_depth=depth, on_scan=report)
         try:
             failed_files[ErrorType.ANALYSIS_ERROR] = bisector.find(results)
         except ScanBudgetExceeded as exceeded:

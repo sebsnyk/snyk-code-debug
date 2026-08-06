@@ -20,12 +20,47 @@ a file that already appeared in a larger subset is cheap. If that caching is
 per-path rather than per-content, moving files into new temporary folders will
 miss the cache: the results stay correct, the savings shrink.
 """
+import math
 import os
 import shutil
 import tempfile
 
 # Below this size, splitting costs more scans than just testing each file.
 LINEAR_THRESHOLD = 3
+
+# Depth is chosen so the deepest subsets hold about this many files. Stop too
+# early and each dirty leaf drags a large group into per-file scanning, which is
+# how a shallow bound ends up costing more than a plain linear run.
+TARGET_LEAF_SIZE = 16
+
+# Below this, the grouped scans cannot pay for themselves: a single extra scan
+# is already a large fraction of the file count. Scan every file instead.
+BISECT_MIN_FILES = 24
+
+
+def default_max_depth(file_count):
+    """Depth bound balancing the sparse win against the dense worst case.
+
+    Unbounded bisection is best when failures are sparse and worst when they are
+    dense — around 2N scans, twice the cost of testing every file. Capping depth
+    bounds that, but capping it too aggressively is its own trap: with large
+    leaves, one bad file forces a per-file scan of its whole leaf. Targeting a
+    small leaf keeps the single-failure case cheap while holding the worst case
+    close to linear.
+    """
+    if file_count < BISECT_MIN_FILES:
+        return 0
+    return max(0, math.ceil(math.log2(file_count / TARGET_LEAF_SIZE)))
+
+
+def cost_estimate(file_count, depth):
+    """-> (best case scans for a single bad file, worst case scans)."""
+    if file_count == 0:
+        return 0, 0
+    leaf = max(1, file_count // (2 ** depth))
+    best = 2 * depth + leaf
+    worst = file_count + 2 ** (depth + 1)
+    return best, worst
 
 
 class ScanBudgetExceeded(Exception):

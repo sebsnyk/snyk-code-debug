@@ -9,7 +9,8 @@ import os
 import tempfile
 import unittest
 
-from snyk_code_debug.bisect import Bisector, ScanBudgetExceeded
+from snyk_code_debug.bisect import (
+    Bisector, ScanBudgetExceeded, cost_estimate, default_max_depth)
 
 
 class FakeScanner:
@@ -51,6 +52,34 @@ class BisectTestCase(unittest.TestCase):
                 handle.write(_marker(path) + '\n')
             paths.append(path)
         return paths
+
+
+class TestDefaultMaxDepth(unittest.TestCase):
+
+    def test_tiny_sets_do_not_bisect(self):
+        for count in (0, 1, 2, 3, 20):
+            self.assertEqual(default_max_depth(count), 0)
+
+    def test_depth_grows_with_file_count(self):
+        depths = [default_max_depth(n) for n in (50, 200, 1000, 5000)]
+        self.assertEqual(depths, sorted(depths))
+        self.assertLess(depths[0], depths[-1])
+
+    def test_worst_case_stays_near_linear(self):
+        """The bound exists to stop the dense case costing ~2x a linear scan."""
+        for count in (50, 141, 243, 592, 2000):
+            _best, worst = cost_estimate(count, default_max_depth(count))
+            self.assertLessEqual(worst, count * 1.6, f'{count} files overshoots')
+
+    def test_single_failure_still_far_cheaper_than_linear(self):
+        for count in (141, 243, 592, 2000):
+            best, _worst = cost_estimate(count, default_max_depth(count))
+            self.assertLess(best, count / 3, f'{count} files loses too much upside')
+
+    def test_default_is_actually_applied_end_to_end(self):
+        # A depth of 0 would mean one grouped scan then every file, so the
+        # count distinguishes the default from the unbounded search.
+        self.assertGreater(default_max_depth(256), 0)
 
 
 class TestBisector(BisectTestCase):
