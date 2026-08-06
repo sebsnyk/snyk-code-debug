@@ -193,6 +193,48 @@ class TestBisector(BisectTestCase):
         Bisector(bounded, max_depth=0).find(files)
         self.assertLess(bounded.calls, unbounded.calls)
 
+    def test_staging_hard_links_rather_than_copying(self):
+        """Bisection re-stages the same file once per level of the search.
+
+        Copying would rewrite the tree several times per run. A hard link shares
+        the inode, so the check is that the staged entry resolves to the same
+        inode as the source rather than a fresh one.
+        """
+        files = self.make_files(8)
+        source_inodes = {os.stat(f).st_ino for f in files}
+        staged_inodes = []
+
+        def scanner(folder):
+            for name in os.listdir(folder):
+                staged_inodes.append(os.stat(os.path.join(folder, name)).st_ino)
+            return False
+
+        Bisector(scanner).find(files)
+        self.assertTrue(staged_inodes, 'nothing was staged')
+        self.assertTrue(
+            set(staged_inodes) <= source_inodes,
+            'staged files got new inodes, so they were copied not linked')
+
+    def test_falls_back_to_copy_when_linking_is_impossible(self):
+        """A source that cannot be hard-linked must still be scanned."""
+        files = self.make_files(4)
+        seen = []
+
+        original_link = os.link
+
+        def refuse_link(src, dst):
+            raise OSError('cross-device link not permitted')
+
+        os.link = refuse_link
+        self.addCleanup(setattr, os, 'link', original_link)
+
+        def scanner(folder):
+            seen.append(sorted(os.listdir(folder)))
+            return False
+
+        self.assertEqual(Bisector(scanner).find(files), [])
+        self.assertEqual(len(seen[0]), 4, 'copy fallback did not stage every file')
+
     def test_on_scan_callback_receives_progress(self):
         files = self.make_files(8)
         seen = []
