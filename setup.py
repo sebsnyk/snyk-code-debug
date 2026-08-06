@@ -11,6 +11,7 @@ setup(
     },
     install_requires=[
     ],
+    python_requires='>=3.9',
     author='Sebastian Roth',
     author_email='sebastian.roth@snyk.io',
     description='Snyk Code debug script to determine files that failed analysis',
