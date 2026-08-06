@@ -15,7 +15,12 @@ class SnykCodeCheck:
             for line in output.split('\n'):
                 if 'FAILED_PARSING' in line:
                     return ErrorType.ANALYSIS_ERROR
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             pass
-        
+        except FileNotFoundError:
+            # main_function pre-flights the CLI, so reaching here means it went
+            # missing mid-run. Swallowing it would report every remaining file
+            # as clean.
+            raise
+
         return None

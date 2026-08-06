@@ -11,13 +11,25 @@ Additionally, a small set of pre-flight checks is included and affected files ar
 
 For a whole set of restrictions around Snyk Code's supported files, please see the [documentation](https://docs.snyk.io/scan-using-snyk/supported-languages-and-frameworks/introduction-to-snyk-supported-languages-and-frameworks#file-size-limit-for-snyk-code-analysis).
 
+## Requirements
+
+The [Snyk CLI](https://docs.snyk.io/snyk-cli/install-or-update-the-snyk-cli) must be on your `PATH` and authenticated (`snyk auth`) — this tool drives it once per file.
+
 ## Installation
 
-This tool is not available in public `pip`, therefore please install it using:
+This tool is not published to PyPI. Install it straight from the repository with [pipx](https://pipx.pypa.io/), which puts the command on your `PATH` in its own isolated environment:
 
 ```
-pip install git+https://github.com/sebsnyk/snyk-code-debug.git
+pipx install git+https://github.com/sebsnyk/snyk-code-debug.git
 ```
+
+To upgrade later:
+
+```
+pipx upgrade snyk-code-debug
+```
+
+`pip install git+…` also works, but on any Python installed via Homebrew or a system package manager it will refuse with `externally-managed-environment` ([PEP 668](https://peps.python.org/pep-0668/)) unless you are inside a virtualenv. pipx sidesteps that.
 
 ## Usage
 
@@ -37,10 +49,33 @@ Some files have failed analysis:
 invalid-file.cpp
 ```
 
+## Exit codes
+
+| Code | Meaning |
+| ---- | ------- |
+| `0`  | Every file parsed successfully |
+| `1`  | Files failed analysis, or the Snyk CLI is missing / the evidence directory is invalid |
+
+The non-zero exit on failures makes the tool usable as a CI gate.
+
 ## Development
 
-Use PIPs built-in tooling to activate a locally linked binary for development.
+Install an editable copy into a virtualenv:
 
 ```
-pip install -e .
+python3 -m venv .venv && .venv/bin/pip install -e .
+```
+
+Or run the checked-out source directly through pipx:
+
+```
+pipx install --editable .
+```
+
+### Tests
+
+Stdlib `unittest`, no test dependencies:
+
+```
+python3 -m unittest discover -s tests -v
 ```

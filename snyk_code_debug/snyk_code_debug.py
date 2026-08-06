@@ -40,6 +40,15 @@ def main_function():
         print('No relevant files detected.')
         sys.exit(0)
 
+    # Every file shells out to the Snyk CLI. Without it each worker raises
+    # FileNotFoundError, the executor prints a traceback per file, and the run
+    # still exits 0 reporting nothing wrong — the worst outcome for a tool whose
+    # job is to tell you which files failed. Fail once, up front, instead. Checked
+    # after file discovery so a run with nothing to scan does not need the CLI.
+    if shutil.which('snyk') is None:
+        print('The Snyk CLI is not on PATH. Install it from https://docs.snyk.io/snyk-cli/install-or-update-the-snyk-cli and run `snyk auth`.')
+        sys.exit(1)
+
     files_processed = 0
 
     failed_files = {enum: [] for enum in ErrorType}
@@ -79,24 +88,29 @@ def main_function():
 
         print()
 
-    if any(failed_files.values()):
-        errors = failed_files[ErrorType.NON_UTF8_ENCODING]
-        if len(errors) > 0:
-            print('Files in non-UTF-8 encoding detected:')
-            for file in errors:
-                print(file)
-
-        errors = failed_files[ErrorType.ANALYSIS_ERROR]
-        if len(errors) > 0:
-            print('Analysis errors detected with the following files:')
-            for file in errors:
-                print(file)
-            if args.evidence_collection is not None:
-                for file in errors:
-                    # copy file to evidence collection folder
-                    shutil.copy(file, args.evidence_collection)
-                print('Evidence collection completed, stored in folder: {}'.format(args.evidence_collection))
+    if not any(failed_files.values()):
         print('All files parsed successfully.')
+        sys.exit(0)
+
+    errors = failed_files[ErrorType.NON_UTF8_ENCODING]
+    if len(errors) > 0:
+        print('Files in non-UTF-8 encoding detected:')
+        for file in errors:
+            print(file)
+
+    errors = failed_files[ErrorType.ANALYSIS_ERROR]
+    if len(errors) > 0:
+        print('Analysis errors detected with the following files:')
+        for file in errors:
+            print(file)
+        if args.evidence_collection is not None:
+            for file in errors:
+                # copy file to evidence collection folder
+                shutil.copy(file, args.evidence_collection)
+            print('Evidence collection completed, stored in folder: {}'.format(args.evidence_collection))
+
+    # Non-zero so the tool is usable as a CI gate, not just interactively.
+    sys.exit(1)
 
 if __name__ == '__main__':
     main_function()
