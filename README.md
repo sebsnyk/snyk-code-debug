@@ -71,3 +71,11 @@ Or run the checked-out source directly through pipx:
 ```
 pipx install --editable .
 ```
+
+### Tests
+
+Stdlib `unittest`, no test dependencies:
+
+```
+python3 -m unittest discover -s tests -v
+```
