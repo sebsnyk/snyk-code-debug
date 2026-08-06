@@ -91,6 +91,15 @@ class Bisector:
         Basenames can collide across directories, so each file gets an index
         prefix. Two files that differ only by directory would otherwise
         overwrite each other and one of them would never be tested.
+
+        Staging is by hard link, not copy. Bisection re-stages the same file
+        once per level of the search, so copying would rewrite the whole tree
+        several times over for a single run — real churn on a large repo. A
+        hard link is a directory entry pointing at the existing inode: no bytes
+        move, and the scanner reads identical content. Copy is the fallback for
+        the cases where linking cannot work — the temp dir on another
+        filesystem, a filesystem without hard links, or a source that is
+        already a symlink.
         """
         if self.max_scans is not None and self.scans >= self.max_scans:
             raise ScanBudgetExceeded(found=None, scans=self.scans)
@@ -98,7 +107,10 @@ class Bisector:
         with tempfile.TemporaryDirectory() as folder:
             for index, path in enumerate(files):
                 staged = os.path.join(folder, f'{index}_{os.path.basename(path)}')
-                shutil.copyfile(path, staged)
+                try:
+                    os.link(path, staged)
+                except OSError:
+                    shutil.copyfile(path, staged)
             self.scans += 1
             if self.on_scan is not None:
                 self.on_scan(self.scans, len(files))
