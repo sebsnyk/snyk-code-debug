@@ -6,13 +6,11 @@
 
 This tool helps to identify specific files that have failed parsing by Snyk Code.
 
-Additionally, a small set of pre-flight checks is included and affected files are listed. They run against the file on disk before any scan, so a file they flag is reported with a reason and never costs a Snyk test. The list of checks currently includes:
-- **Unicode check**, files not encoded in UTF-8 or compatible (e.g. CP1252) will be printed out separately.
-- **File size check**, files larger than 1MB. Snyk Code excludes these from analysis on the Web UI, the CLI and the IDE. 1MB is read as 1 MiB (1,048,576 bytes) and the limit is exclusive, so a file of exactly that size is still analysed.
+Pre-flight checks run against the file on disk before any scan, so a flagged file is reported with a reason and costs no Snyk test:
 
-- **Short JavaScript check**, JavaScript files of three lines or fewer. Snyk Code excludes minified JS at that length. Nothing in the documentation defines minified and every heuristic for it misclassifies something, so this reports on the line count alone and names it as such — the file is only excluded if it is in fact minified.
-
-The 255-character filename limit is not checked: a file on a POSIX filesystem cannot exceed it, because a single path component already caps at 255 bytes.
+- **Unicode** — not UTF-8 or compatible.
+- **File size** — larger than 1 MiB.
+- **Short JavaScript** — JavaScript of three lines or fewer.
 
 For a whole set of restrictions around Snyk Code's supported files, please see the [technical specifications and guidance](https://docs.snyk.io/supported-languages/technical-specifications-and-guidance).
 

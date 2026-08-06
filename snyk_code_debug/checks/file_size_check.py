@@ -7,20 +7,13 @@ from ..error_type import ErrorType
 # larger than 1MB."
 # https://docs.snyk.io/supported-languages/technical-specifications-and-guidance
 #
-# 1MB is written without saying which of the two conventions it means, so take
-# the larger reading of 1 MiB. Under the smaller one, every file between
-# 1,000,000 and 1,048,576 bytes would be reported as excluded when Snyk in fact
-# analyses it. A file wrongly named as a problem costs the user more than the
-# scan the check saves.
+# 1MB read as 1 MiB, the larger of the two conventions: under the smaller one
+# every file between 1,000,000 and 1,048,576 bytes is reported as excluded when
+# Snyk in fact analyses it.
 MAX_FILE_SIZE_BYTES = 1024 * 1024
 
-# "Minified JS files with 3 or fewer lines."
-# Same source. Only the line count is observable — nothing in the documentation
-# defines "minified", and every heuristic for it (long lines, no spaces after
-# commas, a .min. infix) misses real minifiers or catches hand-written code. So
-# this reports on the stated line count alone, for JavaScript files, and says so
-# in the output. A three-line hand-written file is unusual enough that flagging
-# it is worth more than staying quiet about a minified bundle that Snyk skips.
+# "Minified JS files with 3 or fewer lines." Nothing defines "minified", so the
+# line count alone is reported and the output says so.
 MAX_MINIFIED_JS_LINES = 3
 
 JS_EXTENSIONS = ('.js', '.jsx', '.mjs', '.cjs', '.es', '.es6')
