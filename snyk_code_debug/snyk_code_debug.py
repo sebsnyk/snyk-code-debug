@@ -8,7 +8,7 @@ import os.path
 import sys
 
 from .bisect import (
-    BISECT_MIN_FILES, Bisector, ScanBudgetExceeded, cost_estimate, default_max_depth)
+    BISECT_MIN_FILES, Bisector, ScanBudgetExceeded, default_max_depth)
 from .gitignore import glob_respecting_gitignore
 from .progress import update_progress_bar
 from .error_type import ErrorType
@@ -69,8 +69,10 @@ def main_function():
             failed_files[ErrorType.NON_UTF8_ENCODING].append(file)
             results.remove(file)
 
+    # Below the threshold the grouped scans cannot pay for themselves. Switch
+    # silently — the strategy is an implementation detail, not something a user
+    # running this against their own codebase needs narrated.
     if args.strategy == 'bisect' and len(results) < BISECT_MIN_FILES:
-        print(f'Only {len(results)} file(s) — bisecting cannot beat scanning each one. Using linear.')
         args.strategy = 'linear'
 
     if args.strategy == 'bisect':
@@ -80,10 +82,6 @@ def main_function():
         depth = args.max_depth
         if depth is None:
             depth = default_max_depth(len(results))
-        best, worst = cost_estimate(len(results), depth)
-        print(f'Bisecting {len(results)} file(s), max depth {depth}. '
-              f'Expect ~{best} scans for a single failure, {worst} at worst; '
-              f'scanning every file would be {len(results)}.')
 
         bisector = Bisector(failed_parsing, max_scans=args.max_scans,
                             max_depth=depth, on_scan=report)
