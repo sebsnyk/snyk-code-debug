@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from snyk_code_debug.error_type import ErrorType
+from snyk_code_debug.checks.file_size_check import MAX_FILE_SIZE_BYTES, FileSizeCheck
 from snyk_code_debug.checks.unicode_check import UnicodeCheck
 from snyk_code_debug.gitignore import glob_respecting_gitignore, is_ignored, read_gitignore
 from snyk_code_debug.utils.ranged_type import ranged_type
@@ -56,6 +57,38 @@ class TestUnicodeCheck(unittest.TestCase):
 
     def test_empty_file_passes(self):
         self.assertIsNone(UnicodeCheck(self._write(b'')).check())
+
+
+class TestFileSizeCheck(unittest.TestCase):
+    """The limit is 1MB read as 1 MiB, and the docs say "larger than", so a file
+    of exactly that size still gets analysed.
+
+    Files are sparse — `truncate` sets the size without writing the bytes — so
+    the boundary cases cost nothing to create.
+    """
+
+    def _sized(self, size: int) -> str:
+        handle = tempfile.NamedTemporaryFile(delete=False, suffix='.cpp')
+        handle.truncate(size)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_limit_is_one_mebibyte(self):
+        self.assertEqual(MAX_FILE_SIZE_BYTES, 1048576)
+
+    def test_file_at_the_limit_passes(self):
+        self.assertIsNone(FileSizeCheck(self._sized(MAX_FILE_SIZE_BYTES)).check())
+
+    def test_file_one_byte_under_the_limit_passes(self):
+        self.assertIsNone(FileSizeCheck(self._sized(MAX_FILE_SIZE_BYTES - 1)).check())
+
+    def test_file_one_byte_over_the_limit_is_flagged(self):
+        self.assertEqual(FileSizeCheck(self._sized(MAX_FILE_SIZE_BYTES + 1)).check(),
+                         ErrorType.EXCEEDS_SIZE_LIMIT)
+
+    def test_empty_file_passes(self):
+        self.assertIsNone(FileSizeCheck(self._sized(0)).check())
 
 
 class TestGitignore(unittest.TestCase):

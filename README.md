@@ -6,10 +6,13 @@
 
 This tool helps to identify specific files that have failed parsing by Snyk Code.
 
-Additionally, a small set of pre-flight checks is included and affected files are listed. The list of checks currently includes:
-- **Unicode check**, files not encoded in UTF-8 or compatible (e.g. CP1252) will be printed out separately. 
+Additionally, a small set of pre-flight checks is included and affected files are listed. They run against the file on disk before any scan, so a file they flag is reported with a reason and never costs a Snyk test. The list of checks currently includes:
+- **Unicode check**, files not encoded in UTF-8 or compatible (e.g. CP1252) will be printed out separately.
+- **File size check**, files larger than 1MB. Snyk Code excludes these from analysis on the Web UI, the CLI and the IDE. 1MB is read as 1 MiB (1,048,576 bytes) and the limit is exclusive, so a file of exactly that size is still analysed.
 
-For a whole set of restrictions around Snyk Code's supported files, please see the [documentation](https://docs.snyk.io/scan-using-snyk/supported-languages-and-frameworks/introduction-to-snyk-supported-languages-and-frameworks#file-size-limit-for-snyk-code-analysis).
+Two documented limits are deliberately not checked. Minified JS files of three lines or fewer are excluded by Snyk Code, but the documentation does not define minified, and guessing would mean reporting hand-written short files as skipped. The 255-character filename limit cannot be exceeded by a file sitting on a POSIX filesystem, where a single path component already caps at 255 bytes.
+
+For a whole set of restrictions around Snyk Code's supported files, please see the [technical specifications and guidance](https://docs.snyk.io/supported-languages/technical-specifications-and-guidance).
 
 ## Requirements
 
@@ -54,7 +57,7 @@ invalid-file.cpp
 | Code | Meaning |
 | ---- | ------- |
 | `0`  | Every file parsed successfully |
-| `1`  | Files failed analysis, or the Snyk CLI is missing / the evidence directory is invalid |
+| `1`  | Files failed analysis or were flagged by a pre-flight check, or the Snyk CLI is missing / the evidence directory is invalid |
 
 The non-zero exit on failures makes the tool usable as a CI gate.
 

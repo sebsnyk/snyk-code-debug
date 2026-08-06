@@ -14,6 +14,7 @@ from .progress import update_progress_bar
 from .error_type import ErrorType
 from .checks.snyk_code_check import SnykCodeCheck, failed_parsing
 from .checks.unicode_check import UnicodeCheck
+from .checks.file_size_check import FileSizeCheck
 from .utils.ranged_type import ranged_type
 
 SUPPORTED_EXTENSIONS = ['apex','aspx','c','cc','cjs','cls','cpp','cs','ejs','erb','es','es6','go','groovy','h','haml','hpp','htm','html','hxx','java','js','jspx','jsx','jsp','kt','m','mjs','mm','php','py','rb','rhtml','rs','scala','slim','swift','ts','tsx','trigger','vb','vue','xml']
@@ -61,13 +62,18 @@ def main_function():
 
     failed_files = {enum: [] for enum in ErrorType}
 
-    # The unicode check reads the file locally, so it costs nothing and its
-    # results are the same under either strategy. Doing it first also keeps
-    # undecodable files out of the scanned set entirely.
+    # These checks read the file locally, so they cost nothing and their
+    # results are the same under either strategy. Doing them first also keeps
+    # the files they flag out of the scanned set entirely. Size goes before
+    # encoding: a stat is cheaper than the unicode check, which reads the whole
+    # file into memory.
     for file in list(results):
-        if UnicodeCheck(file).check() is not None:
-            failed_files[ErrorType.NON_UTF8_ENCODING].append(file)
-            results.remove(file)
+        for check in (FileSizeCheck, UnicodeCheck):
+            error = check(file).check()
+            if error is not None:
+                failed_files[error].append(file)
+                results.remove(file)
+                break
 
     # Below the threshold the grouped scans cannot pay for themselves. Switch
     # silently — the strategy is an implementation detail, not something a user
@@ -139,6 +145,12 @@ def _report(args, failed_files):
     errors = failed_files[ErrorType.NON_UTF8_ENCODING]
     if len(errors) > 0:
         print('Files in non-UTF-8 encoding detected:')
+        for file in errors:
+            print(file)
+
+    errors = failed_files[ErrorType.EXCEEDS_SIZE_LIMIT]
+    if len(errors) > 0:
+        print('Files above the 1MB Snyk Code size limit detected, these are excluded from analysis:')
         for file in errors:
             print(file)
 
