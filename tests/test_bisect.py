@@ -134,6 +134,36 @@ class TestBisector(BisectTestCase):
             Bisector(scanner, max_scans=5).find(files)
         self.assertEqual(caught.exception.scans, 5)
 
+    def test_max_depth_falls_back_to_per_file_scans(self):
+        files = self.make_files(16)
+        bad = [files[2], files[9]]
+        # depth 1 leaves two subsets of 8; each dirty one is then scanned per file.
+        scanner = FakeScanner(bad)
+        self.assertEqual(Bisector(scanner, max_depth=1).find(files), sorted(bad))
+        # 1 root + 2 halves + 16 individual = 19
+        self.assertEqual(scanner.calls, 19)
+
+    def test_max_depth_zero_is_linear_after_one_scan(self):
+        files = self.make_files(8)
+        bad = [files[5]]
+        scanner = FakeScanner(bad)
+        self.assertEqual(Bisector(scanner, max_depth=0).find(files), bad)
+        self.assertEqual(scanner.calls, 9)
+
+    def test_max_depth_still_short_circuits_a_clean_tree(self):
+        files = self.make_files(32)
+        scanner = FakeScanner([])
+        self.assertEqual(Bisector(scanner, max_depth=0).find(files), [])
+        self.assertEqual(scanner.calls, 1)
+
+    def test_max_depth_beats_unbounded_when_failures_are_dense(self):
+        files = self.make_files(16)
+        unbounded = FakeScanner(files)
+        Bisector(unbounded).find(files)
+        bounded = FakeScanner(files)
+        Bisector(bounded, max_depth=0).find(files)
+        self.assertLess(bounded.calls, unbounded.calls)
+
     def test_on_scan_callback_receives_progress(self):
         files = self.make_files(8)
         seen = []

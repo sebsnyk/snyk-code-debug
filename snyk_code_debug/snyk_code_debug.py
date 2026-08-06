@@ -28,6 +28,8 @@ def main_function():
                         help='bisect (default) scans subsets and splits only the dirty half; linear scans every file')
     parser.add_argument('--max-scans', type=int, default=None,
                         help='Abort bisect after this many scans and report what was found so far')
+    parser.add_argument('--max-depth', type=int, default=None,
+                        help='After this many splits, scan the remaining subset file by file. Bounds the cost when failures are dense')
 
     args = parser.parse_args()
 
@@ -70,7 +72,8 @@ def main_function():
         def report(scan_number, subset_size):
             print(f'\rScan {scan_number}: {subset_size} file(s)', end='')
 
-        bisector = Bisector(failed_parsing, max_scans=args.max_scans, on_scan=report)
+        bisector = Bisector(failed_parsing, max_scans=args.max_scans,
+                            max_depth=args.max_depth, on_scan=report)
         try:
             failed_files[ErrorType.ANALYSIS_ERROR] = bisector.find(results)
         except ScanBudgetExceeded as exceeded:

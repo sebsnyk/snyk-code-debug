@@ -43,9 +43,10 @@ class Bisector:
         Snyk CLI.
     """
 
-    def __init__(self, scan_folder, max_scans=None, on_scan=None):
+    def __init__(self, scan_folder, max_scans=None, max_depth=None, on_scan=None):
         self.scan_folder = scan_folder
         self.max_scans = max_scans
+        self.max_depth = max_depth
         self.on_scan = on_scan
         self.scans = 0
 
@@ -74,22 +75,27 @@ class Bisector:
         if not files:
             return []
         try:
-            return sorted(self._find(files))
+            return sorted(self._find(files, depth=0))
         except ScanBudgetExceeded as exceeded:
             exceeded.found = sorted(exceeded.found or [])
             raise
 
-    def _find(self, files):
+    def _find(self, files, depth):
         if not self._scan(files):
             return []
 
         if len(files) == 1:
             return files
 
-        if len(files) <= LINEAR_THRESHOLD:
+        # Two reasons to stop splitting and test each file directly. A small
+        # subset costs more in split-scans than in individual scans. And past a
+        # depth bound, repeated splitting means the failures are dense rather
+        # than sparse — the case bisection is bad at — so cut the losses.
+        depth_reached = self.max_depth is not None and depth >= self.max_depth
+        if depth_reached or len(files) <= LINEAR_THRESHOLD:
             return [f for f in files if self._scan([f])]
 
         middle = len(files) // 2
-        left = self._find(files[:middle])
-        right = self._find(files[middle:])
+        left = self._find(files[:middle], depth + 1)
+        right = self._find(files[middle:], depth + 1)
         return left + right
