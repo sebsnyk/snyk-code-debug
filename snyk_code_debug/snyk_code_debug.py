@@ -7,10 +7,11 @@ import concurrent.futures
 import os.path
 import sys
 
+from .bisect import Bisector, ScanBudgetExceeded
 from .gitignore import glob_respecting_gitignore
 from .progress import update_progress_bar
 from .error_type import ErrorType
-from .checks.snyk_code_check import SnykCodeCheck
+from .checks.snyk_code_check import SnykCodeCheck, failed_parsing
 from .checks.unicode_check import UnicodeCheck
 from .utils.ranged_type import ranged_type
 
@@ -23,6 +24,10 @@ def main_function():
     parser.add_argument('--concurrency','-c', type=ranged_type(int, 1, 20), default=10, help='Concurrency')
     parser.add_argument('--max-errors', type=ranged_type(int, 1, 100), default=None, help='Max errors')
     parser.add_argument('--evidence-collection', type=str, default=None, help='Copies unanalyzed files to this folder')
+    parser.add_argument('--strategy', choices=['bisect', 'linear'], default='bisect',
+                        help='bisect (default) scans subsets and splits only the dirty half; linear scans every file')
+    parser.add_argument('--max-scans', type=int, default=None,
+                        help='Abort bisect after this many scans and report what was found so far')
 
     args = parser.parse_args()
 
@@ -53,15 +58,35 @@ def main_function():
 
     failed_files = {enum: [] for enum in ErrorType}
 
+    # The unicode check reads the file locally, so it costs nothing and its
+    # results are the same under either strategy. Doing it first also keeps
+    # undecodable files out of the scanned set entirely.
+    for file in list(results):
+        if UnicodeCheck(file).check() is not None:
+            failed_files[ErrorType.NON_UTF8_ENCODING].append(file)
+            results.remove(file)
+
+    if args.strategy == 'bisect':
+        def report(scan_number, subset_size):
+            print(f'\rScan {scan_number}: {subset_size} file(s)', end='')
+
+        bisector = Bisector(failed_parsing, max_scans=args.max_scans, on_scan=report)
+        try:
+            failed_files[ErrorType.ANALYSIS_ERROR] = bisector.find(results)
+        except ScanBudgetExceeded as exceeded:
+            failed_files[ErrorType.ANALYSIS_ERROR] = exceeded.found or []
+            print(f'\nStopped after {exceeded.scans} scans (--max-scans). Results are partial.')
+        print(f'\rCompleted in {bisector.scans} scan(s) for {len(results)} file(s).')
+        return _report(args, failed_files)
+
+    total_files = len(results)
+    if total_files == 0:
+        return _report(args, failed_files)
+
     update_progress_bar(files_processed, total_files)
 
     def process_file(file):
-        unicode_check = UnicodeCheck(file).check()
-
-        if unicode_check is not None:
-            failed_files[unicode_check].append(file)
-            return
-
+        # Undecodable files were filtered out before this point.
         with tempfile.TemporaryDirectory() as tmpdirname:
             basename = os.path.basename(file)
             shutil.copyfile(file, f'{tmpdirname}/{basename}')
@@ -88,6 +113,11 @@ def main_function():
 
         print()
 
+    return _report(args, failed_files)
+
+
+def _report(args, failed_files):
+    """Print the outcome and exit. Shared by both strategies."""
     if not any(failed_files.values()):
         print('All files parsed successfully.')
         sys.exit(0)
