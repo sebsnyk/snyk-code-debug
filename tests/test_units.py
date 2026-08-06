@@ -9,7 +9,8 @@ import tempfile
 import unittest
 
 from snyk_code_debug.error_type import ErrorType
-from snyk_code_debug.checks.file_size_check import MAX_FILE_SIZE_BYTES, FileSizeCheck
+from snyk_code_debug.checks.file_size_check import (
+    MAX_FILE_SIZE_BYTES, MAX_MINIFIED_JS_LINES, FileSizeCheck)
 from snyk_code_debug.checks.unicode_check import UnicodeCheck
 from snyk_code_debug.gitignore import glob_respecting_gitignore, is_ignored, read_gitignore
 from snyk_code_debug.utils.ranged_type import ranged_type
@@ -89,6 +90,55 @@ class TestFileSizeCheck(unittest.TestCase):
 
     def test_empty_file_passes(self):
         self.assertIsNone(FileSizeCheck(self._sized(0)).check())
+
+
+class TestMinifiedJsCheck(unittest.TestCase):
+    """"Minified JS files with 3 or fewer lines" — only the line count is
+    observable, so that is what is reported, and only for JavaScript.
+    """
+
+    def _js(self, lines: int, suffix: str = '.js') -> str:
+        handle = tempfile.NamedTemporaryFile('w', delete=False, suffix=suffix)
+        handle.write('\n'.join(f'var x{n} = {n};' for n in range(lines)))
+        if lines:
+            handle.write('\n')
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        return handle.name
+
+    def test_limit_is_three_lines(self):
+        self.assertEqual(MAX_MINIFIED_JS_LINES, 3)
+
+    def test_three_lines_is_flagged(self):
+        self.assertEqual(FileSizeCheck(self._js(3)).check(), ErrorType.LIKELY_MINIFIED)
+
+    def test_one_line_is_flagged(self):
+        self.assertEqual(FileSizeCheck(self._js(1)).check(), ErrorType.LIKELY_MINIFIED)
+
+    def test_four_lines_passes(self):
+        self.assertIsNone(FileSizeCheck(self._js(4)).check())
+
+    def test_empty_js_passes(self):
+        # No lines to minify, and an empty file is excluded for other reasons.
+        self.assertIsNone(FileSizeCheck(self._js(0)).check())
+
+    def test_applies_across_the_javascript_extensions(self):
+        for suffix in ('.js', '.jsx', '.mjs', '.cjs', '.es', '.es6', '.JS'):
+            self.assertEqual(FileSizeCheck(self._js(2, suffix)).check(),
+                             ErrorType.LIKELY_MINIFIED, suffix)
+
+    def test_short_non_javascript_files_are_untouched(self):
+        # The documented exclusion is about JS. A three-line Python or C++ file
+        # is ordinary and must not be reported.
+        for suffix in ('.py', '.cpp', '.ts', '.java'):
+            self.assertIsNone(FileSizeCheck(self._js(2, suffix)).check(), suffix)
+
+    def test_size_limit_takes_precedence(self):
+        handle = tempfile.NamedTemporaryFile(delete=False, suffix='.js')
+        handle.truncate(MAX_FILE_SIZE_BYTES + 1)
+        handle.close()
+        self.addCleanup(os.unlink, handle.name)
+        self.assertEqual(FileSizeCheck(handle.name).check(), ErrorType.EXCEEDS_SIZE_LIMIT)
 
 
 class TestGitignore(unittest.TestCase):
